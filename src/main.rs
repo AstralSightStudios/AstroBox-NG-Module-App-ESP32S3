@@ -6,16 +6,10 @@ use corelib::{
     ecs,
 };
 use esp32_nimble::{utilities::BleUuid, utilities::BleUuid::Uuid16, BLEDevice, BLEScan};
-use esp_idf_svc::{
-    log::EspLogger,
-    sys::{self, link_patches},
-};
+use esp_idf_svc::{log::EspLogger, sys::link_patches};
 use log::info;
-use std::{ffi::c_char, io, panic, sync::Arc, thread};
-use tokio::{
-    runtime::Builder,
-    sync::{mpsc, oneshot},
-};
+use std::{sync::Arc, time::Duration};
+use tokio::sync::{mpsc, oneshot};
 
 mod ancs;
 pub mod statlogger;
@@ -28,95 +22,25 @@ fn uuid_contains(u: &BleUuid, needle: &str) -> bool {
     s.contains(&needle.to_ascii_lowercase())
 }
 
-fn configure_pthread(stack_size: usize) -> io::Result<()> {
-    let mut cfg = unsafe { sys::esp_pthread_get_default_config() };
-    cfg.stack_size = stack_size;
-    cfg.prio = cfg.prio.max(1);
-    cfg.inherit_cfg = false;
-    cfg.thread_name = core::ptr::null::<c_char>();
-    cfg.pin_to_core = -1;
-    let res = unsafe { sys::esp_pthread_set_cfg(&cfg) };
-    if res != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("esp_pthread_set_cfg failed with code {res:#X}"),
-        ));
-    }
-    Ok(())
-}
-
-fn spawn_runtime_with_stack(
-    stack_size: usize,
-) -> io::Result<thread::JoinHandle<anyhow::Result<()>>> {
-    configure_pthread(stack_size)?;
-    thread::Builder::new()
-        .name(format!("app_runtime_{stack_size}"))
-        .stack_size(stack_size)
-        .spawn(move || -> anyhow::Result<()> {
-            let rt = Builder::new_current_thread().enable_all().build()?;
-            rt.block_on(async { tokio::task::LocalSet::new().run_until(run_app()).await })
-        })
-}
-
-fn spawn_runtime_thread() -> anyhow::Result<thread::JoinHandle<anyhow::Result<()>>> {
-    const STACK_CANDIDATES: &[usize] = &[
-        256 * 1024,
-        224 * 1024,
-        192 * 1024,
-        160 * 1024,
-        128 * 1024,
-        96 * 1024,
-    ];
-    const HEAP_MARGIN: usize = 48 * 1024;
-
-    let free_heap = unsafe { esp_idf_svc::sys::esp_get_free_heap_size() as usize };
-    let mut candidates: Vec<usize> = STACK_CANDIDATES
-        .iter()
-        .copied()
-        .filter(|size| size.saturating_add(HEAP_MARGIN) <= free_heap)
-        .collect();
-
-    if candidates.is_empty() {
-        let fallback = free_heap.saturating_sub(HEAP_MARGIN).max(64 * 1024);
-        candidates.push(fallback);
-    }
-
-    let mut last_err: Option<io::Error> = None;
-    for stack_size in candidates {
-        println!(
-            "[runtime] trying stack size {} bytes (free heap {} bytes)",
-            stack_size, free_heap
-        );
-        match spawn_runtime_with_stack(stack_size) {
-            Ok(handle) => return Ok(handle),
-            Err(err) => {
-                println!("[runtime] failed with stack {} bytes: {}", stack_size, err);
-                last_err = Some(err);
-            }
-        }
-    }
-
-    Err(anyhow::anyhow!(
-        "Failed to create BLE runtime thread: {}",
-        last_err
-            .map(|e| e.to_string())
-            .unwrap_or_else(|| "unknown error".to_string())
-    ))
-}
-
 fn main() -> anyhow::Result<()> {
-    let handle = spawn_runtime_thread()?;
-
-    match handle.join() {
-        Ok(res) => res,
-        Err(err) => panic::resume_unwind(err),
-    }
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let local = tokio::task::LocalSet::new();
+    local.block_on(&rt, run_app())
 }
 
 async fn run_app() -> anyhow::Result<()> {
     link_patches();
     EspLogger::initialize_default();
-    ecs::init_runtime_default();
+    ecs::init_runtime_default_with_stack(64 * 1024);
+    tokio::task::spawn_local(async {
+        let mut ticker = tokio::time::interval(Duration::from_secs(10));
+        loop {
+            ticker.tick().await;
+            statlogger::log_heap_info();
+        }
+    });
 
     let mi_service = u16_uuid(0xFE95);
     let uuid_service_flag = u16_uuid(0x0050);
