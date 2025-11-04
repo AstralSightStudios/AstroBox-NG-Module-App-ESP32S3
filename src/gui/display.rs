@@ -16,7 +16,7 @@ use mipidsi::{
 type DisplayDcPin<'d> = PinDriver<'d, Gpio4, esp_idf_svc::hal::gpio::Output>;
 type DisplayRstPin<'d> = PinDriver<'d, Gpio3, esp_idf_svc::hal::gpio::Output>;
 type DisplayInterface<'d> = SpiInterface<'d, SpiDeviceDriver<'d, SpiDriver<'d>>, DisplayDcPin<'d>>;
-type DisplayType<'d> = mipidsi::Display<DisplayInterface<'d>, GC9A01, DisplayRstPin<'d>>;
+pub type DisplayType<'d> = mipidsi::Display<DisplayInterface<'d>, GC9A01, DisplayRstPin<'d>>;
 
 const DISPLAY_SPI_BUFFER_SIZE: usize = 1024;
 static mut DISPLAY_SPI_BUFFER: [u8; DISPLAY_SPI_BUFFER_SIZE] = [0; DISPLAY_SPI_BUFFER_SIZE];

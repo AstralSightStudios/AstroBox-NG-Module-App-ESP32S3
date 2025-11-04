@@ -26,11 +26,13 @@ async fn run_app() -> anyhow::Result<()> {
     });
 
     let peripherals = Peripherals::take()?;
-    let (_display, _backlight) = gui::display::init_display_gc9a01(peripherals)?;
+    let (mut display, mut backlight) = gui::display::init_display_gc9a01(peripherals)?;
 
-    //miwear::connect().await?;
+    let _ = &mut backlight;
 
-    futures_lite::future::pending::<()>().await;
+    miwear::connect().await?;
 
-    Ok(())
+    loop {
+        gui::slint_ui::render_hello_world(&mut display)?;
+    }
 }
