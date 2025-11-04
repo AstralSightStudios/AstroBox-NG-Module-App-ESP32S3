@@ -1,4 +1,9 @@
-use std::{cell::RefCell, ops::Range, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    ops::Range,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{anyhow, Result};
 use embedded_graphics_core::{
@@ -7,6 +12,7 @@ use embedded_graphics_core::{
     prelude::{Point, Size},
     primitives::Rectangle,
 };
+use esp_idf_svc::sys::esp_get_free_heap_size;
 use slint::{
     platform::{
         self,
@@ -15,7 +21,7 @@ use slint::{
         },
         Platform, WindowAdapter,
     },
-    PhysicalSize,
+    PhysicalSize, SharedString,
 };
 
 use super::display::DisplayType;
@@ -28,17 +34,40 @@ const DISPLAY_HEIGHT: usize = 240;
 thread_local! {
     static PLATFORM_WINDOW: RefCell<Option<Rc<MinimalSoftwareWindow>>> =
         const { RefCell::new(None) };
+    static FRAME_STATS: RefCell<FrameStats> = RefCell::new(FrameStats::new());
+    static APP_INSTANCE: RefCell<Option<App>> = const { RefCell::new(None) };
 }
 
 pub fn render_hello_world(display: &mut DisplayType<'static>) -> Result<()> {
     let window = ensure_platform_window()?;
-
     window.set_size(PhysicalSize::new(DISPLAY_WIDTH as _, DISPLAY_HEIGHT as _));
     window.request_redraw();
 
-    let ui = App::new().map_err(|e| anyhow!("Failed to create Slint App: {:?}", e))?;
-    ui.show()
-        .map_err(|e| anyhow!("Failed to show Slint App: {:?}", e))?;
+    ensure_app()?;
+
+    let frame_start = Instant::now();
+    let (displayed_fps, last_render_duration) =
+        FRAME_STATS.with(|cell| cell.borrow().snapshot_for_display());
+
+    let heap_bytes = unsafe { esp_get_free_heap_size() };
+    let fps_display = if displayed_fps > f32::EPSILON {
+        format!("{displayed_fps:.1}")
+    } else {
+        "--".to_string()
+    };
+    let render_display = if let Some(duration) = last_render_duration {
+        format!("{:.2}", duration.as_secs_f32() * 1_000.0)
+    } else {
+        "--".to_string()
+    };
+    let heap_kb = heap_bytes as f32 / 1024.0;
+    let stats_text = SharedString::from(format!(
+        "FPS: {fps}\nRender: {render} ms\nHeap: {heap:.1} KB",
+        fps = fps_display,
+        render = render_display,
+        heap = heap_kb
+    ));
+    set_stats_text(stats_text);
 
     platform::update_timers_and_animations();
 
@@ -59,6 +88,12 @@ pub fn render_hello_world(display: &mut DisplayType<'static>) -> Result<()> {
     if let Some(err) = render_error.into_inner() {
         return Err(err);
     }
+
+    let render_duration = frame_start.elapsed();
+    FRAME_STATS.with(|cell| {
+        cell.borrow_mut()
+            .update_after_frame(frame_start, render_duration);
+    });
 
     Ok(())
 }
@@ -135,4 +170,62 @@ fn ensure_platform_window() -> Result<Rc<MinimalSoftwareWindow>> {
         *cell.borrow_mut() = Some(window.clone());
         Ok(window)
     })
+}
+
+fn ensure_app() -> Result<()> {
+    APP_INSTANCE.with(|cell| {
+        if cell.borrow().is_none() {
+            let app = App::new().map_err(|e| anyhow!("Failed to create Slint App: {:?}", e))?;
+            app.show()
+                .map_err(|e| anyhow!("Failed to show Slint App: {:?}", e))?;
+            cell.replace(Some(app));
+        }
+        Ok(())
+    })
+}
+
+fn set_stats_text(stats: SharedString) {
+    APP_INSTANCE.with(|cell| {
+        if let Some(app) = cell.borrow().as_ref() {
+            app.set_stats_text(stats.clone());
+            PLATFORM_WINDOW.with(|window_cell| {
+                if let Some(window) = window_cell.borrow().as_ref() {
+                    window.request_redraw();
+                }
+            });
+        }
+    });
+}
+
+struct FrameStats {
+    last_frame_start: Option<Instant>,
+    last_render_time: Option<Duration>,
+    last_fps: f32,
+}
+
+impl FrameStats {
+    const fn new() -> Self {
+        Self {
+            last_frame_start: None,
+            last_render_time: None,
+            last_fps: 0.0,
+        }
+    }
+
+    fn snapshot_for_display(&self) -> (f32, Option<Duration>) {
+        (self.last_fps, self.last_render_time)
+    }
+
+    fn update_after_frame(&mut self, frame_start: Instant, render_time: Duration) {
+        if let Some(previous_start) = self.last_frame_start {
+            if let Some(frame_interval) = frame_start.checked_duration_since(previous_start) {
+                let frame_time = frame_interval.as_secs_f32();
+                if frame_time > f32::EPSILON {
+                    self.last_fps = 1.0 / frame_time;
+                }
+            }
+        }
+        self.last_frame_start = Some(frame_start);
+        self.last_render_time = Some(render_time);
+    }
 }

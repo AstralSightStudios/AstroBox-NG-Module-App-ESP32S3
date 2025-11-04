@@ -11,11 +11,13 @@ name = "app_esp32c3"
 harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]
-opt-level = "s"
+opt-level = "z"
+codegen-units = 1
 
 [profile.dev]
 debug = true    # Symbols are nice, and they don't increase the size on Flash
 opt-level = "z"
+codegen-units = 1
 
 [features]
 default = []
@@ -45,7 +47,7 @@ slint = { version = "1.14.1", default-features = false, features = [
     "std",
     "renderer-software",
     "unsafe-single-threaded",
-    "compat-1-2",
+    "compat-1-2"
 ] }
 
 [build-dependencies]

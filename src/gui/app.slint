@@ -2,13 +2,24 @@ export component App inherits Window {
     width: 240px;
     height: 240px;
 
+    in-out property <string> stats-text: "";
+
     background: #000000;
 
     Text {
-        text: "Hello World";
+        text: "AstroBox Pocket";
         color: #FFFFFF;
         font-size: 24px;
         horizontal-alignment: center;
         vertical-alignment: center;
+    }
+
+    Text {
+        text: root.stats-text;
+        color: #00FF00;
+        font-size: 14px;
+        horizontal-alignment: center;
+        y: 50px;
+        vertical-alignment: top;
     }
 }

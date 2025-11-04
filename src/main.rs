@@ -30,9 +30,22 @@ async fn run_app() -> anyhow::Result<()> {
 
     let _ = &mut backlight;
 
-    miwear::connect().await?;
+    tokio::task::spawn_local(async {
+        if let Err(err) = miwear::connect().await {
+            log::error!("miwear connect failed: {err:?}");
+        }
+    });
 
-    loop {
-        gui::slint_ui::render_hello_world(&mut display)?;
-    }
+    tokio::task::spawn_local(async move {
+        loop {
+            if let Err(err) = gui::slint_ui::render_hello_world(&mut display) {
+                log::error!("render loop exited: {err:?}");
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(16)).await;
+        }
+    })
+    .await?;
+
+    Ok(())
 }
