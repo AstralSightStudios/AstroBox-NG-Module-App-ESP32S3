@@ -1,8 +1,8 @@
 use corelib::device::{
     self,
-    xiaomi::{r#type::ConnectType, SendError},
+    xiaomi::{SendError, r#type::ConnectType},
 };
-use esp32_nimble::{utilities::BleUuid, utilities::BleUuid::Uuid16, BLEDevice, BLEScan};
+use esp32_nimble::{BLEDevice, BLEScan, utilities::BleUuid, utilities::BleUuid::Uuid16};
 use log::info;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -164,7 +164,7 @@ pub async fn connect() -> anyhow::Result<()> {
         let notify_addr = device_addr.clone();
         ch_recv.on_notify(move |payload| {
             log::info!("Notify(0x005E): {}", corelib::tools::to_hex_string(payload));
-            corelib::device::xiaomi::packet::on_packet(
+            corelib::device::xiaomi::packet::dispatcher::on_packet(
                 notify_handle.clone(),
                 notify_addr.clone(),
                 payload.to_vec(),
