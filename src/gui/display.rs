@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Result};
 use esp_idf_svc::hal::{
     delay::Delay,
-    gpio::{Gpio3, Gpio4, PinDriver, Pins},
+    gpio::{Gpio2, Gpio3, Gpio4, Gpio5, Gpio6, Gpio7, PinDriver},
     ledc::{config::TimerConfig, LedcDriver, LedcTimerDriver, LEDC},
-    prelude::Peripherals,
-    spi::{config::DriverConfig, Dma, SpiConfig, SpiDeviceDriver, SpiDriver},
+    spi::{config::DriverConfig, Dma, SpiConfig, SpiDeviceDriver, SpiDriver, SPI2},
 };
 use mipidsi::{
     interface::SpiInterface,
@@ -21,34 +20,43 @@ pub type DisplayType<'d> = mipidsi::Display<DisplayInterface<'d>, GC9A01, Displa
 const DISPLAY_SPI_BUFFER_SIZE: usize = 1024;
 static mut DISPLAY_SPI_BUFFER: [u8; DISPLAY_SPI_BUFFER_SIZE] = [0; DISPLAY_SPI_BUFFER_SIZE];
 
-pub fn init_display_gc9a01(p: Peripherals) -> Result<(DisplayType<'static>, LedcDriver<'static>)> {
-    let Peripherals {
-        pins, ledc, spi2, ..
-    } = p;
-    let Pins {
-        gpio2,
-        gpio3,
-        gpio4,
-        gpio5,
-        gpio6,
-        gpio7,
-        ..
+pub struct DisplayPins {
+    pub backlight: Gpio2,
+    pub rst: Gpio3,
+    pub dc: Gpio4,
+    pub cs: Gpio5,
+    pub mosi: Gpio6,
+    pub sclk: Gpio7,
+}
+
+pub fn init_display_gc9a01(
+    spi2: SPI2,
+    ledc: LEDC,
+    pins: DisplayPins,
+) -> Result<(DisplayType<'static>, LedcDriver<'static>)> {
+    let DisplayPins {
+        backlight,
+        rst,
+        dc,
+        cs,
+        mosi,
+        sclk,
     } = pins;
     let LEDC {
         timer0, channel0, ..
     } = ledc;
 
-    let dc = PinDriver::output(gpio4)?; // D/C
-    let rst = PinDriver::output(gpio3)?; // RST
+    let dc = PinDriver::output(dc)?; // D/C
+    let rst = PinDriver::output(rst)?; // RST
 
     let ledc_timer = LedcTimerDriver::new(timer0, &TimerConfig::new().frequency(25_000.into()))?;
-    let mut backlight = LedcDriver::new(channel0, ledc_timer, gpio2)?;
+    let mut backlight = LedcDriver::new(channel0, ledc_timer, backlight)?;
     backlight.set_duty(backlight.get_max_duty() / 2)?;
 
     let spi_driver = SpiDriver::new(
         spi2,
-        gpio7, // SCLK
-        gpio6, // MOSI (SDO)
+        sclk, // SCLK
+        mosi, // MOSI (SDO)
         Option::<esp_idf_svc::hal::gpio::Gpio8>::None,
         &DriverConfig {
             dma: Dma::Auto(DISPLAY_SPI_BUFFER_SIZE),
@@ -57,7 +65,7 @@ pub fn init_display_gc9a01(p: Peripherals) -> Result<(DisplayType<'static>, Ledc
     )?;
     let spi_dev = SpiDeviceDriver::new(
         spi_driver,
-        Some(gpio5), // CS
+        Some(cs), // CS
         &SpiConfig::new().baudrate(40_000_000.into()),
     )?;
 

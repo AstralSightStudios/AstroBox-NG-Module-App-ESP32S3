@@ -19,17 +19,17 @@ use slint::{
         software_renderer::{
             LineBufferProvider, MinimalSoftwareWindow, RepaintBufferType, Rgb565Pixel,
         },
-        Platform, WindowAdapter,
+        Platform, PointerEventButton, WindowAdapter,
     },
-    PhysicalSize, SharedString,
+    LogicalPosition, PhysicalSize, SharedString,
 };
 
 use super::display::DisplayType;
 
 slint::include_modules!();
 
-const DISPLAY_WIDTH: usize = 240;
-const DISPLAY_HEIGHT: usize = 240;
+pub const DISPLAY_WIDTH: usize = 240;
+pub const DISPLAY_HEIGHT: usize = 240;
 thread_local! {
     static PLATFORM_WINDOW: RefCell<Option<Rc<MinimalSoftwareWindow>>> =
         const { RefCell::new(None) };
@@ -328,4 +328,45 @@ impl FrameStats {
         self.last_frame_start = Some(frame_start);
         self.last_render_time = Some(render_time);
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PointerAction {
+    Press,
+    Move,
+    Release,
+}
+
+pub fn dispatch_pointer_action(action: PointerAction, position: (f32, f32)) -> Result<()> {
+    let window = ensure_platform_window()?;
+    let logical_position = LogicalPosition::new(position.0, position.1);
+    let event = match action {
+        PointerAction::Press => slint::platform::WindowEvent::PointerPressed {
+            position: logical_position,
+            button: PointerEventButton::Left,
+        },
+        PointerAction::Move => slint::platform::WindowEvent::PointerMoved {
+            position: logical_position,
+        },
+        PointerAction::Release => slint::platform::WindowEvent::PointerReleased {
+            position: logical_position,
+            button: PointerEventButton::Left,
+        },
+    };
+    window.dispatch_event(event);
+    window.request_redraw();
+    Ok(())
+}
+
+pub fn set_touch_text(stats: SharedString) {
+    APP_INSTANCE.with(|cell| {
+        if let Some(app) = cell.borrow().as_ref() {
+            app.set_touch_text(stats.clone());
+            PLATFORM_WINDOW.with(|window_cell| {
+                if let Some(window) = window_cell.borrow().as_ref() {
+                    window.request_redraw();
+                }
+            });
+        }
+    });
 }

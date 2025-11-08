@@ -3,6 +3,7 @@ export component App inherits Window {
     height: 240px;
 
     in-out property <string> stats-text: "";
+    in-out property <string> touch-text: "";
 
     background: #000000;
 
@@ -21,5 +22,14 @@ export component App inherits Window {
         horizontal-alignment: center;
         y: 50px;
         vertical-alignment: top;
+    }
+
+    Text {
+        text: root.touch-text;
+        color: #00BFFF;
+        font-size: 14px;
+        horizontal-alignment: center;
+        vertical-alignment: bottom;
+        y: 200px;
     }
 }
