@@ -1,8 +1,7 @@
-use anyhow::Ok;
 use esp_idf_svc::{
     hal::{gpio::Pins, prelude::Peripherals},
     log::EspLogger,
-    sys::{link_patches},
+    sys::link_patches,
     io::vfs::MountedEventfs,
 };
 use std::time::Duration;
