@@ -1,8 +1,14 @@
+use core::convert::TryInto;
+
+use anyhow::anyhow;
 use esp_idf_svc::{
-    hal::{gpio::Pins, prelude::Peripherals},
+    eventloop::EspSystemEventLoop,
+    hal::{gpio::Pins, modem::Modem, prelude::Peripherals},
     io::vfs::MountedEventfs,
     log::EspLogger,
+    nvs::EspDefaultNvsPartition,
     sys::link_patches,
+    wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
 };
 use std::time::Duration;
 
@@ -10,6 +16,10 @@ pub mod gui;
 pub mod miwear;
 pub mod statlogger;
 pub mod touch;
+
+const WIFI_SSID: &str = "ASUS_AX86U";
+const WIFI_PASSWORD: &str = "reveries2005";
+const ECS_STACK_SIZE: usize = 32 * 1024;
 
 fn main() -> anyhow::Result<()> {
     link_patches();
@@ -27,7 +37,22 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run_app() -> anyhow::Result<()> {
-    corelib::ecs::init_runtime_default_with_stack(64 * 1024);
+    /*
+    let Peripherals {
+        pins,
+        ledc,
+        spi2,
+        i2c0,
+        modem,
+        ..
+    } = Peripherals::take()?;
+    */
+
+    let Peripherals { modem, .. } = Peripherals::take()?;
+
+    let _wifi = init_wifi(modem)?;
+
+    corelib::ecs::init_runtime_default_with_stack(ECS_STACK_SIZE);
     tokio::task::spawn_local(async {
         let mut ticker = tokio::time::interval(Duration::from_secs(10));
         loop {
@@ -36,13 +61,7 @@ async fn run_app() -> anyhow::Result<()> {
         }
     });
 
-    let Peripherals {
-        pins,
-        ledc,
-        spi2,
-        i2c0,
-        ..
-    } = Peripherals::take()?;
+    /*
     let Pins {
         gpio0,
         gpio1,
@@ -81,6 +100,7 @@ async fn run_app() -> anyhow::Result<()> {
             reset: gpio0,
         },
     )?;
+    */
 
     tokio::task::spawn_local(async {
         if let Err(err) = miwear::connect().await {
@@ -90,14 +110,46 @@ async fn run_app() -> anyhow::Result<()> {
 
     tokio::task::spawn_local(async move {
         loop {
+            /*
             if let Err(err) = gui::slint_ui::render_hello_world(&mut display) {
                 log::error!("render loop exited: {err:?}");
                 break;
             }
+            */
             tokio::time::sleep(Duration::from_millis(16)).await;
         }
     })
     .await?;
 
     Ok(())
+}
+
+fn init_wifi(modem: Modem) -> anyhow::Result<BlockingWifi<EspWifi<'static>>> {
+    let sys_loop = EspSystemEventLoop::take()?;
+    let nvs = EspDefaultNvsPartition::take()?;
+
+    let mut wifi = BlockingWifi::wrap(EspWifi::new(modem, sys_loop.clone(), Some(nvs))?, sys_loop)?;
+
+    let wifi_configuration = Configuration::Client(ClientConfiguration {
+        ssid: WIFI_SSID
+            .try_into()
+            .map_err(|_| anyhow!("Wi-Fi SSID is too long"))?,
+        password: WIFI_PASSWORD
+            .try_into()
+            .map_err(|_| anyhow!("Wi-Fi password is too long"))?,
+        auth_method: AuthMethod::WPA2Personal,
+        ..Default::default()
+    });
+
+    wifi.set_configuration(&wifi_configuration)?;
+    wifi.start()?;
+    log::info!("Wi-Fi started");
+
+    wifi.connect()?;
+    log::info!("Wi-Fi connected to {}", WIFI_SSID);
+
+    wifi.wait_netif_up()?;
+    log::info!("Wi-Fi network interface is up");
+
+    Ok(wifi)
 }
