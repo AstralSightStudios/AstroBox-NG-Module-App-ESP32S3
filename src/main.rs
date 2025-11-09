@@ -1,7 +1,9 @@
+use anyhow::Ok;
 use esp_idf_svc::{
     hal::{gpio::Pins, prelude::Peripherals},
     log::EspLogger,
-    sys::link_patches,
+    sys::{link_patches},
+    io::vfs::MountedEventfs,
 };
 use std::time::Duration;
 
@@ -11,16 +13,21 @@ pub mod statlogger;
 pub mod touch;
 
 fn main() -> anyhow::Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread()
+    link_patches();
+    EspLogger::initialize_default();
+
+    let _mounted_eventfs = MountedEventfs::mount(5)?;
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
+
     let local = tokio::task::LocalSet::new();
+
     local.block_on(&rt, run_app())
 }
 
 async fn run_app() -> anyhow::Result<()> {
-    link_patches();
-    EspLogger::initialize_default();
     corelib::ecs::init_runtime_default_with_stack(64 * 1024);
     tokio::task::spawn_local(async {
         let mut ticker = tokio::time::interval(Duration::from_secs(10));
