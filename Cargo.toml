@@ -1,5 +1,5 @@
 [package]
-name = "app_esp32c3"
+name = "app_esp32s3"
 version = "0.1.0"
 authors = ["Searchstars <searchstars@163.com>"]
 edition = "2021"
@@ -7,22 +7,34 @@ resolver = "2"
 rust-version = "1.77"
 
 [[bin]]
-name = "app_esp32c3"
+name = "app_esp32s3"
 harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]
-opt-level = "z"
+opt-level = "s"
 codegen-units = 1
 panic = "abort"
 
 [profile.dev]
-opt-level = "z"
+opt-level = 1
 codegen-units = 1
-panic = "abort"
-debug-assertions = false
-overflow-checks = false
-strip = "debuginfo"
-debug = 1
+debug = true
+
+[profile.dev.package.image]
+opt-level = 0
+codegen-units = 1
+
+[profile.dev.package.resvg]
+opt-level = 0
+codegen-units = 1
+
+[profile.release.package.image]
+opt-level = 2
+codegen-units = 1
+
+[profile.release.package.resvg]
+opt-level = 2
+codegen-units = 1
 
 [features]
 default = []

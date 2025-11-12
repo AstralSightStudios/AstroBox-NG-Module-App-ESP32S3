@@ -12,6 +12,7 @@ use esp_idf_svc::{
 };
 use std::time::Duration;
 
+mod allocator;
 pub mod gui;
 pub mod miwear;
 pub mod statlogger;

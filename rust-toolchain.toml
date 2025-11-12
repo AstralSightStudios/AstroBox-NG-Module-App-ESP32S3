@@ -1,5 +1,5 @@
 [toolchain]
-channel = "nightly"
+channel = "esp"
 profile = "minimal"
 components = ["rust-src"]
-targets = ["riscv32imc-esp-espidf"]
+targets = ["xtensa-esp32s3-espidf"]

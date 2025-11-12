@@ -171,7 +171,7 @@ pub async fn connect() -> anyhow::Result<()> {
 
     let device_addr = addr.to_string();
     let device_name = wanted_name.to_string();
-    let auth_key = "bec25af5568a0121bbde9a768ec2d7f9".to_string();
+    let auth_key = "fd0ce943010e5112c6a35cb3ea61b968".to_string();
     let sar_version = 2;
 
     if ch_recv.can_notify() {
