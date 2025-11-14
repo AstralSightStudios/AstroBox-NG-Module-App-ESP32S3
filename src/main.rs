@@ -2,7 +2,7 @@ use core::convert::TryInto;
 
 use anyhow::anyhow;
 use corelib::{
-    device::xiaomi::{XiaomiDevice, components::network::NetworkComponent},
+    device::xiaomi::{components::network::NetworkComponent, XiaomiDevice},
     ecs::entity::EntityExt,
 };
 use esp_idf_svc::{
@@ -42,7 +42,6 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run_app() -> anyhow::Result<()> {
-    /*
     let Peripherals {
         pins,
         ledc,
@@ -51,9 +50,6 @@ async fn run_app() -> anyhow::Result<()> {
         modem,
         ..
     } = Peripherals::take()?;
-    */
-
-    let Peripherals { modem, .. } = Peripherals::take()?;
 
     let _wifi = init_wifi(modem)?;
 
@@ -67,7 +63,6 @@ async fn run_app() -> anyhow::Result<()> {
         }
     });
 
-    /*
     let Pins {
         gpio0,
         gpio1,
@@ -78,7 +73,7 @@ async fn run_app() -> anyhow::Result<()> {
         gpio6,
         gpio7,
         gpio18,
-        gpio19,
+        gpio16,
         ..
     } = pins;
 
@@ -101,12 +96,11 @@ async fn run_app() -> anyhow::Result<()> {
         i2c0,
         touch::TouchPins {
             sda: gpio18,
-            scl: gpio19,
+            scl: gpio16,
             interrupt: gpio1,
             reset: gpio0,
         },
     )?;
-    */
 
     tokio::task::spawn_local(async {
         if let Err(err) = miwear::connect().await {
@@ -116,12 +110,10 @@ async fn run_app() -> anyhow::Result<()> {
 
     tokio::task::spawn_local(async move {
         loop {
-            /*
             if let Err(err) = gui::slint_ui::render_hello_world(&mut display) {
                 log::error!("render loop exited: {err:?}");
                 break;
             }
-            */
             tokio::time::sleep(Duration::from_millis(16)).await;
         }
     })

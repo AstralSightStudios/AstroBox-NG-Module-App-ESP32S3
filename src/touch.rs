@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use cst816s::{TouchEvent as CstTouchEvent, CST816S};
 use esp_idf_svc::hal::{
     delay::Delay,
-    gpio::{Gpio0, Gpio1, Gpio18, Gpio19, Input, Output, PinDriver, Pull},
+    gpio::{Gpio0, Gpio1, Gpio16, Gpio18, Input, Output, PinDriver, Pull},
     i2c::{config::Config as I2cConfig, I2cDriver, I2C0},
     units::Hertz,
 };
@@ -23,7 +23,7 @@ type TouchController = CST816S<
 
 pub struct TouchPins {
     pub sda: Gpio18,
-    pub scl: Gpio19,
+    pub scl: Gpio16,
     pub interrupt: Gpio1,
     pub reset: Gpio0,
 }
